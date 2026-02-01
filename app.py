@@ -67,4 +67,26 @@ new_dpo = dpo_base + dpo_adj
 cash_from_ar = ar_base - ((new_dso * new_rev) / 365)
 cash_from_inv = inv_base - ((new_dio * new_cogs) / 365)
 cash_from_ap = ((new_dpo * new_cogs) / 365) - ap_base
-total_wc_gain = cash_from_ar + cash_from_inv +
+total_wc_gain = cash_from_ar + cash_from_inv + cash_from_ap
+
+total_cash_impact = profit_gain + total_wc_gain
+
+# --- TULEMUSED ---
+st.divider()
+m1, m2, m3 = st.columns(3)
+m1.metric("Kasumi kasv (pärast makse)", f"{profit_gain:,.0f} €")
+m2.metric("Vabanenud raha bilansist", f"{total_wc_gain:,.0f} €")
+m3.metric("KOGU RAHAVOO VÕIT", f"{total_cash_impact:,.0f} €")
+
+# Graafik
+fig = go.Figure(go.Waterfall(
+    orientation = "v",
+    measure = ["relative", "relative", "relative", "total"],
+    x = ["Kasumi mõju", "Kulude sääst", "Käibekapitali efekt", "KOGUVÕIT"],
+    y = [(new_rev - rev_base) * (1-tax_rate), 
+         ((cogs_base - new_cogs) + (opex_base - new_opex)) * (1-tax_rate), 
+         total_wc_gain, 
+         total_cash_impact],
+    connector = {"line":{"color":"rgb(63, 63, 63)"}},
+))
+st.plotly_chart(fig, use_container_width=True)
