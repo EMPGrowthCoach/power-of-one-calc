@@ -2,48 +2,87 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="Power of One: Finantsmõju", layout="wide")
-st.title("📊 Power of One: Finantsmõju kalkulaator")
+st.set_page_config(page_title="Power of One: Bilansipõhine", layout="wide")
 
-# --- KÜLGRIIBA: SISENDID ---
-st.sidebar.header("1. Praegune seis")
-rev = st.sidebar.number_input("Aastane müügitulu (€)", value=10000000)
-cogs = st.sidebar.number_input("Aastane COGS (€)", value=6000000)
-opex = st.sidebar.number_input("Aastased püsikulud (€)", value=2500000)
+# Pealkiri
+st.title("🚀 Power of One: Finantsmõju (Bilansi põhine)")
+st.markdown("Sisesta oma kasumiaruande ja bilansi näitajad ning vaata, kuidas muudatused rahavoogu mõjutavad.")
 
-st.sidebar.header("2. Muudatused (1%)")
-p_inc = st.sidebar.slider("Hinna muutus (%)", -5.0, 5.0, 1.0)
-v_inc = st.sidebar.slider("Mahu muutus (%)", -5.0, 5.0, 1.0)
-c_dec = st.sidebar.slider("COGS vähendamine (%)", -5.0, 5.0, 1.0)
-o_dec = st.sidebar.slider("Püsikulude vähendamine (%)", -5.0, 5.0, 1.0)
+# --- SIDEBAR: SISENDID ---
+st.sidebar.header("1. Kasumiaruanne")
+rev_base = st.sidebar.number_input("Aastane müügitulu (€)", value=10000000)
+cogs_base = st.sidebar.number_input("Aastane COGS (€)", value=6000000)
+opex_base = st.sidebar.number_input("Aastased püsikulud (€)", value=2500000)
+tax_rate = st.sidebar.number_input("Tulumaksumäär (nt. 0.2)", value=0.20)
 
-# --- ARVUTUSED ---
-current_gp = rev - cogs
-current_ebitda = current_gp - opex
+st.sidebar.header("2. Bilansilised jäägid")
+ar_base = st.sidebar.number_input("Ostjate võlgnevused (AR) (€)", value=1232876)
+inv_base = st.sidebar.number_input("Varud (Inventory) (€)", value=986301)
+ap_base = st.sidebar.number_input("Hankijate võlgnevused (AP) (€)", value=493150)
 
-# Uue seisu arvutus
-new_rev = rev * (1 + p_inc/100) * (1 + v_inc/100)
-new_cogs = cogs * (1 - c_dec/100) * (1 + v_inc/100) # COGS sõltub mahust
-new_opex = opex * (1 - o_dec/100)
+# Hetkeseisu arvutused (Working Capital päevad)
+dso_base = (ar_base / rev_base) * 365
+dio_base = (inv_base / cogs_base) * 365
+dpo_base = (ap_base / cogs_base) * 365
 
-new_gp = new_rev - new_cogs
-new_ebitda = new_gp - new_opex
-diff = new_ebitda - current_ebitda
+st.sidebar.info(f"Sinu hetkeseis: DSO {dso_base:.1f} | DIO {dio_base:.1f} | DPO {dpo_base:.1f}")
 
-# --- VISUALISEERIMINE ---
-col1, col2 = st.columns([1, 1])
+# --- PEALEHT: MUUDATUSED (SLAIDERID) ---
+st.subheader("Sinu plaanitavad muudatused")
+c1, c2, c3, c4 = st.columns(4)
+p_inc = c1.slider("Hinna tõus (%)", 0.0, 5.0, 1.0)
+v_inc = c2.slider("Mahu kasv (%)", 0.0, 5.0, 1.0)
+c_dec = c3.slider("COGS vähendus (%)", 0.0, 5.0, 1.0)
+o_dec = c4.slider("Püsikulu vähendus (%)", 0.0, 5.0, 1.0)
 
-with col1:
-    st.metric("Uus EBITDA", f"{new_ebitda:,.0f} €", f"{diff:,.0f} € parandus")
-    
-with col2:
-    fig = go.Figure(go.Waterfall(
-        name = "Mõju", orientation = "v",
-        measure = ["relative", "relative", "total"],
-        x = ["Algne EBITDA", "1% Parandused", "Uus EBITDA"],
-        y = [current_ebitda, diff, new_ebitda],
-        connector = {"line":{"color":"rgb(63, 63, 63)"}},
-    ))
-    st.plotly_chart(fig, use_container_width=True)
+cc1, cc2, cc3 = st.columns(3)
+dso_adj = cc1.number_input("DSO vähendamine (päeva)", value=-1)
+dio_adj = cc2.number_input("DIO vähendamine (päeva)", value=-1)
+dpo_adj = cc3.number_input("DPO suurendamine (päeva)", value=1)
 
-st.info("Nipp: Liiguta külgribal slaidereid, et näha, kuidas iga 'kang' kasumit mõjutab.")
+# --- ARVUTUSLOOGIKA ---
+# 1. Kasumi mõju
+new_rev = rev_base * (1 + p_inc/100) * (1 + v_inc/100)
+new_cogs = cogs_base * (1 - c_dec/100) * (1 + v_inc/100)
+new_opex = opex_base * (1 - o_dec/100)
+
+old_ebitda = rev_base - cogs_base - opex_base
+new_ebitda = new_rev - new_cogs - new_opex
+profit_gain = (new_ebitda - old_ebitda) * (1 - tax_rate)
+
+# 2. Käibekapitali mõju (Cash freed from Balance Sheet)
+# Arvutame uued sihttasemed päevades
+new_dso = dso_base + dso_adj
+new_dio = dio_base + dio_adj
+new_dpo = dpo_base + dpo_adj
+
+cash_from_ar = ar_base - ((new_dso * new_rev) / 365)
+cash_from_inv = inv_base - ((new_dio * new_cogs) / 365)
+cash_from_ap = ((new_dpo * new_cogs) / 365) - ap_base
+total_wc_gain = cash_from_ar + cash_from_inv + cash_from_ap
+
+total_cash_impact = profit_gain + total_wc_gain
+
+# --- TULEMUSTE EKRAAN ---
+st.divider()
+m1, m2, m3 = st.columns(3)
+m1.metric("Kasumi kasv (pärast makse)", f"{profit_gain:,.0f} €")
+m2.metric("Vabanenud raha bilansist", f"{total_wc_gain:,.0f} €")
+m3.metric("KOGU RAHAVOO VÕIT", f"{total_cash_impact:,.0f} €")
+
+# --- WATERFALL GRAAFIK ---
+fig = go.Figure(go.Waterfall(
+    orientation = "v",
+    measure = ["relative", "relative", "relative", "total"],
+    x = ["Hinna/Mahu mõju", "Kulude sääst", "Käibekapitali efekt", "KOGUVÕIT"],
+    y = [(new_rev - rev_base) * (1-tax_rate), 
+         ((cogs_base - new_cogs) + (opex_base - new_opex)) * (1-tax_rate), 
+         total_wc_gain, 
+         total_cash_impact],
+    connector = {"line":{"color":"rgb(63, 63, 63)"}},
+))
+
+st.subheader("Kust tuleb sinu võit?")
+st.plotly_chart(fig, use_container_width=True)
+
+st.caption(f"Selgitus: Kui suudad vähendada DSO-d {abs(dso_adj)} päeva võrra, vabaneb bilansist täiendavalt {cash_from_ar:,.0f} €.")
