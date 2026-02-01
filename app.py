@@ -20,12 +20,24 @@ ar_base = st.sidebar.number_input("Ostjate võlgnevused (AR) (€)", value=12328
 inv_base = st.sidebar.number_input("Varud (Inventory) (€)", value=986301)
 ap_base = st.sidebar.number_input("Hankijate võlgnevused (AP) (€)", value=493150)
 
-# Hetkeseisu arvutused (Working Capital päevad)
+# --- ARVUTUSED (HETKESEIS) ---
 dso_base = (ar_base / rev_base) * 365
 dio_base = (inv_base / cogs_base) * 365
 dpo_base = (ap_base / cogs_base) * 365
+# Cash Conversion Cycle (CCC)
+ccc_base = dso_base + dio_base - dpo_base
+# Tootlikkus: EBITDA / (AR + Inv - AP)
+current_ebitda = rev_base - cogs_base - opex_base
+current_wc = ar_base + inv_base - ap_base
+productivity = current_ebitda / current_wc if current_wc > 0 else 0
 
-st.sidebar.info(f"Sinu hetkeseis: DSO {dso_base:.1f} | DIO {dio_base:.1f} | DPO {dpo_base:.1f}")
+# --- LISA KÜLGRIBALE INFOKAST ---
+st.sidebar.info(f"""
+**Sinu hetkeseis:**
+* DSO: {dso_base:.1f} | DIO: {dio_base:.1f} | DPO: {dpo_base:.1f}
+* **CCC: {ccc_base:.1f} päeva**
+* **Tootlikkus: {productivity:.2f} €** (EBITDA / WC)
+""")
 
 # --- PEALEHT: MUUDATUSED (SLAIDERID) ---
 st.subheader("Sinu plaanitavad muudatused")
@@ -40,18 +52,14 @@ dso_adj = cc1.number_input("DSO vähendamine (päeva)", value=-1)
 dio_adj = cc2.number_input("DIO vähendamine (päeva)", value=-1)
 dpo_adj = cc3.number_input("DPO suurendamine (päeva)", value=1)
 
-# --- ARVUTUSLOOGIKA ---
-# 1. Kasumi mõju
+# --- MÕJU ARVUTAMINE ---
 new_rev = rev_base * (1 + p_inc/100) * (1 + v_inc/100)
 new_cogs = cogs_base * (1 - c_dec/100) * (1 + v_inc/100)
 new_opex = opex_base * (1 - o_dec/100)
 
-old_ebitda = rev_base - cogs_base - opex_base
 new_ebitda = new_rev - new_cogs - new_opex
-profit_gain = (new_ebitda - old_ebitda) * (1 - tax_rate)
+profit_gain = (new_ebitda - current_ebitda) * (1 - tax_rate)
 
-# 2. Käibekapitali mõju (Cash freed from Balance Sheet)
-# Arvutame uued sihttasemed päevades
 new_dso = dso_base + dso_adj
 new_dio = dio_base + dio_adj
 new_dpo = dpo_base + dpo_adj
@@ -59,30 +67,4 @@ new_dpo = dpo_base + dpo_adj
 cash_from_ar = ar_base - ((new_dso * new_rev) / 365)
 cash_from_inv = inv_base - ((new_dio * new_cogs) / 365)
 cash_from_ap = ((new_dpo * new_cogs) / 365) - ap_base
-total_wc_gain = cash_from_ar + cash_from_inv + cash_from_ap
-
-total_cash_impact = profit_gain + total_wc_gain
-
-# --- TULEMUSTE EKRAAN ---
-st.divider()
-m1, m2, m3 = st.columns(3)
-m1.metric("Kasumi kasv (pärast makse)", f"{profit_gain:,.0f} €")
-m2.metric("Vabanenud raha bilansist", f"{total_wc_gain:,.0f} €")
-m3.metric("KOGU RAHAVOO VÕIT", f"{total_cash_impact:,.0f} €")
-
-# --- WATERFALL GRAAFIK ---
-fig = go.Figure(go.Waterfall(
-    orientation = "v",
-    measure = ["relative", "relative", "relative", "total"],
-    x = ["Hinna/Mahu mõju", "Kulude sääst", "Käibekapitali efekt", "KOGUVÕIT"],
-    y = [(new_rev - rev_base) * (1-tax_rate), 
-         ((cogs_base - new_cogs) + (opex_base - new_opex)) * (1-tax_rate), 
-         total_wc_gain, 
-         total_cash_impact],
-    connector = {"line":{"color":"rgb(63, 63, 63)"}},
-))
-
-st.subheader("Kust tuleb sinu võit?")
-st.plotly_chart(fig, use_container_width=True)
-
-st.caption(f"Selgitus: Kui suudad vähendada DSO-d {abs(dso_adj)} päeva võrra, vabaneb bilansist täiendavalt {cash_from_ar:,.0f} €.")
+total_wc_gain = cash_from_ar + cash_from_inv +
